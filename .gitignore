@@ -39,3 +39,24 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/src/generated/prisma
+
+# SQLite database
+*.db
+*.db-journal
+
+# Word temp files
+~$*.docx
+
+# SoW documents (proprietary)
+*.docx
+
+# Agent build outputs
+/agent/dist
+/agent/release
+/agent/node_modules
+
+# Architecture diagrams
+*.png
+architecture-diagram.jsx

@@ -1,0 +1,59 @@
+NetWatch Employee Monitoring Agent
+End User License Agreement (EULA)
+
+Copyright (c) 2024 Infinititech Partners. All rights reserved.
+
+IMPORTANT: READ CAREFULLY BEFORE INSTALLING OR USING THIS SOFTWARE
+
+This End User License Agreement ("Agreement") is a legal agreement between you (either an
+individual or a single entity) and Infinititech Partners ("Company") for the NetWatch Employee
+Monitoring Agent software ("Software").
+
+BY INSTALLING, COPYING, OR OTHERWISE USING THE SOFTWARE, YOU AGREE TO BE BOUND BY THE
+TERMS OF THIS AGREEMENT.
+
+1. GRANT OF LICENSE
+The Company grants you a non-exclusive, non-transferable license to install and use the
+Software on computers owned or controlled by the organization that has purchased a valid
+license for NetWatch.
+
+2. RESTRICTIONS
+You may not:
+- Distribute, sublicense, rent, or lease the Software
+- Reverse engineer, decompile, or disassemble the Software
+- Remove any proprietary notices or labels on the Software
+- Use the Software for any purpose other than employee monitoring on company-owned devices
+
+3. EMPLOYEE NOTIFICATION REQUIREMENT
+Use of this Software requires that all monitored employees be properly notified in accordance
+with applicable laws and regulations. The Company is not responsible for ensuring compliance
+with local privacy laws.
+
+4. DATA COLLECTION
+The Software collects activity data including but not limited to:
+- Application usage
+- Website visits
+- Screen captures
+- System information
+
+All collected data is transmitted to and stored on servers designated by the organization.
+
+5. DISCLAIMER OF WARRANTY
+THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
+
+6. LIMITATION OF LIABILITY
+IN NO EVENT SHALL THE COMPANY BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, OR
+CONSEQUENTIAL DAMAGES ARISING OUT OF THE USE OR INABILITY TO USE THE SOFTWARE.
+
+7. TERMINATION
+This Agreement is effective until terminated. The Company may terminate this Agreement
+if you fail to comply with any term of this Agreement.
+
+8. GOVERNING LAW
+This Agreement shall be governed by the laws of the jurisdiction in which the Company
+is incorporated.
+
+By installing this Software, you acknowledge that you have read this Agreement, understand
+it, and agree to be bound by its terms and conditions.
+
+For questions or support, contact: support@netwatch.io
