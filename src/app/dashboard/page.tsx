@@ -113,10 +113,10 @@ async function getRecentActivity() {
 
   return activities.map((activity) => ({
     id: activity.id,
-    type: activity.type,
-    title: activity.title,
+    type: activity.type || "APP",
+    title: activity.title || activity.applicationName || "Unknown",
     computerName: activity.computer.name,
-    startedAt: activity.startedAt,
+    startedAt: activity.startedAt || activity.startTime,
     category: activity.category,
   }));
 }

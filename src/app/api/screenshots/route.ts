@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { computerId, imageUrl, thumbnail, activeWindow, capturedAt } = body;
+    const { computerId, imageUrl, activeWindow, capturedAt } = body;
 
     if (!computerId || !imageUrl) {
       return NextResponse.json(
@@ -108,7 +108,6 @@ export async function POST(req: NextRequest) {
       data: {
         computerId,
         imageUrl,
-        thumbnail,
         activeWindow,
         capturedAt: capturedAt ? new Date(capturedAt) : new Date(),
       },

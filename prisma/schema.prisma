@@ -24,6 +24,7 @@ model Organization {
   blockRules     BlockRule[]
   settings       Setting[]
   alerts         Alert[]
+  auditLogs      AuditLog[]
 }
 
 model User {
@@ -325,4 +326,27 @@ model ProcessLog {
 
   @@index([computerId])
   @@index([capturedAt])
+}
+
+// Audit Logs - admin action logging for compliance
+model AuditLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String?
+  userEmail      String?
+  action         String       // CREATE, UPDATE, DELETE, VIEW, LOGIN, LOGOUT, EXPORT, COMMAND
+  resource       String       // User, Computer, Policy, Alert, Keylog, Screenshot, etc.
+  resourceId     String?
+  details        String?      // JSON with additional details
+  ipAddress      String?
+  userAgent      String?
+  status         String       @default("SUCCESS") // SUCCESS, FAILURE
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([action])
+  @@index([resource])
+  @@index([createdAt])
 }

@@ -32,9 +32,9 @@ async function getComputer(computerId: string) {
     groupColor: computer.group?.color || "#6B7280",
     activities: computer.activityLogs.map((log) => ({
       id: log.id,
-      type: log.type,
-      title: log.title,
-      startedAt: log.startedAt,
+      type: log.type || "UNKNOWN",
+      title: log.title || log.applicationName || "Unknown",
+      startedAt: log.startedAt || log.startTime,
       category: log.category,
     })),
   };

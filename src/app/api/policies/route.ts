@@ -54,28 +54,29 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, type, pattern, isActive } = body;
+    const { type, pattern, action, groupIds, isActive } = body;
 
-    if (!name || !type || !pattern) {
+    if (!type || !pattern) {
       return NextResponse.json(
-        { error: "Name, type, and pattern are required" },
+        { error: "Type and pattern are required" },
         { status: 400 }
       );
     }
 
-    const validTypes = ["WEBSITE", "APPLICATION", "KEYWORD"];
+    const validTypes = ["WEBSITE", "APP"];
     if (!validTypes.includes(type.toUpperCase())) {
       return NextResponse.json(
-        { error: "Invalid type. Must be WEBSITE, APPLICATION, or KEYWORD" },
+        { error: "Invalid type. Must be WEBSITE or APP" },
         { status: 400 }
       );
     }
 
     const policy = await prisma.blockRule.create({
       data: {
-        name,
         type: type.toUpperCase(),
         pattern,
+        action: action || "BLOCK",
+        groupIds,
         isActive: isActive ?? true,
         organizationId: session.user.organizationId,
       },

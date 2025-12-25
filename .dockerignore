@@ -1,0 +1,51 @@
+# Dependencies
+node_modules
+npm-debug.log
+
+# Build output
+.next
+out
+dist
+build
+
+# Development
+.env.local
+.env.development
+.env.test
+
+# Agent (built separately)
+agent/
+agent/node_modules
+agent/dist
+agent/release
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Tests
+__tests__
+*.test.*
+*.spec.*
+coverage
+
+# Misc
+*.log
+*.bak
+tmp/
+temp/

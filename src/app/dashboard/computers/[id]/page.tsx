@@ -221,7 +221,7 @@ export default async function ComputerDetailsPage({ params }: Props) {
                         {Math.floor(log.duration / 60)}m {log.duration % 60}s
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {format(new Date(log.startedAt), "PPp")}
+                        {format(new Date(log.startTime), "PPp")}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -239,11 +239,11 @@ export default async function ComputerDetailsPage({ params }: Props) {
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {computer.screenshots.map((screenshot) => (
+                {computer.screenshots.filter(s => s.imageUrl).map((screenshot) => (
                   <div key={screenshot.id} className="overflow-hidden rounded-lg border">
                     <div className="relative aspect-video">
                       <Image
-                        src={screenshot.imageUrl}
+                        src={screenshot.imageUrl!}
                         alt="Screenshot"
                         fill
                         className="object-cover"

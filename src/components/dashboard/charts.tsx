@@ -58,7 +58,7 @@ export function DashboardCharts() {
             borderRadius: "8px",
             color: "hsl(var(--popover-foreground))",
           }}
-          formatter={(value: number) => [`${value}h`, ""]}
+          formatter={(value) => [`${value ?? 0}h`, ""]}
         />
         <Area
           type="monotone"

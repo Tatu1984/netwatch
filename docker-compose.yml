@@ -1,0 +1,138 @@
+version: '3.8'
+
+services:
+  # NetWatch Pro Web Application
+  netwatch:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: netwatch-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+      - "4000:4000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/app/data/netwatch.db
+      - AUTH_SECRET=${AUTH_SECRET:-netwatch-secret-change-me}
+      - AUTH_URL=http://localhost:3000
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXT_PUBLIC_SOCKET_URL=http://localhost:4000
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-netwatch-encryption-key-32-chars!}
+    volumes:
+      - netwatch-data:/app/data
+      - netwatch-uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - netwatch-network
+
+  # PostgreSQL Database (Production)
+  postgres:
+    image: postgres:16-alpine
+    container_name: netwatch-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-netwatch}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-netwatch}
+      - POSTGRES_DB=${POSTGRES_DB:-netwatch}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-netwatch}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - netwatch-network
+    profiles:
+      - production
+
+  # Redis (for session storage and pub/sub in production)
+  redis:
+    image: redis:7-alpine
+    container_name: netwatch-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - netwatch-network
+    profiles:
+      - production
+
+  # MinIO (S3-compatible storage for screenshots/recordings)
+  minio:
+    image: minio/minio:latest
+    container_name: netwatch-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-netwatch}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-netwatch123}
+    volumes:
+      - minio-data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - netwatch-network
+    profiles:
+      - production
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: netwatch-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - netwatch
+    networks:
+      - netwatch-network
+    profiles:
+      - production
+
+volumes:
+  netwatch-data:
+    driver: local
+  netwatch-uploads:
+    driver: local
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  minio-data:
+    driver: local
+
+networks:
+  netwatch-network:
+    driver: bridge

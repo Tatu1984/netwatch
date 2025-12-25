@@ -283,7 +283,7 @@ export function initSocketServer(httpServer: HttpServer) {
             data: {
               computerId,
               keystrokes: stroke.keys,
-              applicationName: stroke.applicationName,
+              application: stroke.applicationName,
               windowTitle: stroke.windowTitle,
               capturedAt: new Date(stroke.timestamp),
             },
@@ -486,9 +486,9 @@ export function initSocketServer(httpServer: HttpServer) {
 
     // Start watching a computer
     socket.on("watch_computer", (data: { computerId: string }) => {
-      const console = connectedConsoles.get(socket.id);
-      if (console) {
-        console.watchingComputers.add(data.computerId);
+      const client = connectedConsoles.get(socket.id);
+      if (client) {
+        client.watchingComputers.add(data.computerId);
         socket.join(`watching:${data.computerId}`);
 
         // Request screen stream from agent
@@ -504,9 +504,9 @@ export function initSocketServer(httpServer: HttpServer) {
 
     // Stop watching a computer
     socket.on("unwatch_computer", (data: { computerId: string }) => {
-      const console = connectedConsoles.get(socket.id);
-      if (console) {
-        console.watchingComputers.delete(data.computerId);
+      const client = connectedConsoles.get(socket.id);
+      if (client) {
+        client.watchingComputers.delete(data.computerId);
         socket.leave(`watching:${data.computerId}`);
 
         // Check if anyone else is watching, if not stop streaming
@@ -617,7 +617,7 @@ export function initSocketServer(httpServer: HttpServer) {
             computerId: data.computerId,
             fileName: data.remotePath.split("/").pop() || "unknown",
             remotePath: data.remotePath,
-            localPath: data.localPath,
+            localPath: data.localPath || data.remotePath,
             direction: data.direction,
             status: "IN_PROGRESS",
             startedAt: new Date(),
@@ -671,10 +671,10 @@ export function initSocketServer(httpServer: HttpServer) {
     });
 
     socket.on("disconnect", () => {
-      const console = connectedConsoles.get(socket.id);
-      if (console) {
+      const connectedClient = connectedConsoles.get(socket.id);
+      if (connectedClient) {
         // Stop watching all computers
-        for (const computerId of console.watchingComputers) {
+        for (const computerId of connectedClient.watchingComputers) {
           const watchersRoom = consoleNamespace.adapter.rooms.get(`watching:${computerId}`);
           if (!watchersRoom || watchersRoom.size <= 1) {
             const agent = connectedAgents.get(computerId);

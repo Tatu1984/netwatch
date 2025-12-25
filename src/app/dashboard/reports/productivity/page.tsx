@@ -50,6 +50,7 @@ interface CategoryData {
   name: string;
   value: number;
   color: string;
+  [key: string]: string | number;
 }
 
 interface ProductivityStats {
@@ -447,7 +448,7 @@ export default function ProductivityReportPage() {
                       borderRadius: "8px",
                       color: "hsl(var(--popover-foreground))",
                     }}
-                    formatter={(value: number) => [`${value}h`, "Hours"]}
+                    formatter={(value) => [`${value ?? 0}h`, "Hours"]}
                   />
                   <Legend />
                 </PieChart>
@@ -521,7 +522,7 @@ export default function ProductivityReportPage() {
                     borderRadius: "8px",
                     color: "hsl(var(--popover-foreground))",
                   }}
-                  formatter={(value: number) => [`${value}h`, ""]}
+                  formatter={(value) => [`${value ?? 0}h`, ""]}
                 />
                 <Legend />
                 <Bar

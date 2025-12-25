@@ -51,7 +51,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
 
     const { id } = await params;
     const body = await req.json();
-    const { name, type, pattern, isActive } = body;
+    const { type, pattern, isActive, action, groupIds } = body;
 
     const existing = await prisma.blockRule.findFirst({
       where: {
@@ -67,9 +67,10 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     const policy = await prisma.blockRule.update({
       where: { id },
       data: {
-        name,
         type: type?.toUpperCase(),
         pattern,
+        action,
+        groupIds,
         isActive,
       },
     });

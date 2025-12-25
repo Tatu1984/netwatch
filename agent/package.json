@@ -124,6 +124,7 @@
     "active-win": "^8.1.1",
     "auto-launch": "^5.0.6",
     "electron-store": "^8.1.0",
+    "node-global-key-listener": "^0.3.0",
     "node-machine-id": "^1.1.12",
     "ps-list": "^8.1.1",
     "screenshot-desktop": "^1.15.0",

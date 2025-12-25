@@ -14,9 +14,6 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog";
 import {
   Table,
@@ -49,7 +46,7 @@ import {
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
-import Image from "next/image";
+import { LiveRemoteDesktop } from "@/components/remote/LiveRemoteDesktop";
 
 interface Computer {
   id: string;
@@ -584,65 +581,16 @@ export default function RemoteControlPage() {
 
       {/* Remote Session Dialog */}
       <Dialog open={sessionDialogOpen} onOpenChange={setSessionDialogOpen}>
-        <DialogContent className="max-w-6xl h-[80vh]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {activeSession && getSessionTypeIcon(activeSession.sessionType)}
-              Remote Session - {activeSession?.computer.name}
-            </DialogTitle>
-            <DialogDescription>
-              {activeSession?.sessionType === "VIEW" && "View only mode - you cannot control this computer"}
-              {activeSession?.sessionType === "CONTROL" && "Full control mode - keyboard and mouse are enabled"}
-              {activeSession?.sessionType === "SHELL" && "Remote shell - type commands below"}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex-1 bg-black rounded-lg overflow-hidden relative">
-            {/* Placeholder for remote screen */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center text-white">
-                <Monitor className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                <p className="text-lg mb-2">Remote Desktop View</p>
-                <p className="text-sm text-gray-400">
-                  Connecting to {activeSession?.computer.hostname}...
-                </p>
-                <p className="text-xs text-gray-500 mt-4">
-                  Session Key: {activeSession?.sessionKey}
-                </p>
-              </div>
-            </div>
-            {/* Mock screenshot */}
-            {activeSession?.computer && (
-              <Image
-                src={`https://picsum.photos/seed/${activeSession.computerId}/1920/1080`}
-                alt="Remote screen"
-                fill
-                className="object-cover opacity-50"
-                unoptimized
-              />
-            )}
-          </div>
-          <div className="flex justify-between items-center">
-            <div className="flex gap-2">
-              <Badge variant="outline" className="gap-1">
-                <Clock className="h-3 w-3" />
-                {activeSession && formatDistanceToNow(new Date(activeSession.startedAt))}
-              </Badge>
-              {getStatusBadge(activeSession?.status || "")}
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline">
-                <Maximize2 className="h-4 w-4 mr-2" />
-                Fullscreen
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => activeSession && endSession(activeSession.id)}
-              >
-                <Square className="h-4 w-4 mr-2" />
-                End Session
-              </Button>
-            </div>
-          </div>
+        <DialogContent className="max-w-6xl h-[85vh] p-0 gap-0">
+          {activeSession && (
+            <LiveRemoteDesktop
+              computerId={activeSession.computerId}
+              computerName={activeSession.computer.name}
+              sessionType={activeSession.sessionType as "VIEW" | "CONTROL" | "SHELL"}
+              sessionId={activeSession.id}
+              onEnd={() => endSession(activeSession.id)}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

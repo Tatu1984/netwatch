@@ -15,6 +15,9 @@ import { format } from "date-fns";
 
 async function getScreenshots() {
   return prisma.screenshot.findMany({
+    where: {
+      imageUrl: { not: null },
+    },
     take: 50,
     orderBy: { capturedAt: "desc" },
     include: {
@@ -88,7 +91,7 @@ export default async function ScreenshotsPage() {
               <Card key={screenshot.id} className="overflow-hidden">
                 <div className="relative aspect-video bg-muted">
                   <Image
-                    src={screenshot.imageUrl}
+                    src={screenshot.imageUrl!}
                     alt={`Screenshot from ${screenshot.computer.name}`}
                     fill
                     className="object-cover"

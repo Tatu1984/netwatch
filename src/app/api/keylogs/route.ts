@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { encrypt, safeDecrypt } from "@/lib/encryption";
 
 // GET /api/keylogs - List keylogs
 export async function GET(req: NextRequest) {
@@ -55,7 +56,7 @@ export async function GET(req: NextRequest) {
       where.application = { contains: application };
     }
 
-    const [keylogs, total] = await Promise.all([
+    const [rawKeylogs, total] = await Promise.all([
       prisma.keylog.findMany({
         where,
         include: {
@@ -73,6 +74,12 @@ export async function GET(req: NextRequest) {
       }),
       prisma.keylog.count({ where }),
     ]);
+
+    // Decrypt keystrokes before returning
+    const keylogs = rawKeylogs.map((keylog) => ({
+      ...keylog,
+      keystrokes: safeDecrypt(keylog.keystrokes),
+    }));
 
     return NextResponse.json({
       keylogs,
@@ -122,16 +129,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Encrypt keystrokes before storing
+    const encryptedKeystrokes = encrypt(keystrokes);
+
     const keylog = await prisma.keylog.create({
       data: {
         computerId,
         windowTitle,
         application,
-        keystrokes,
+        keystrokes: encryptedKeystrokes,
       },
     });
 
-    return NextResponse.json(keylog, { status: 201 });
+    return NextResponse.json({
+      ...keylog,
+      keystrokes, // Return unencrypted for immediate response
+    }, { status: 201 });
   } catch (error) {
     console.error("Error creating keylog:", error);
     return NextResponse.json(

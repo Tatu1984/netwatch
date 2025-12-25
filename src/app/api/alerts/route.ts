@@ -12,7 +12,6 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type");
-    const severity = searchParams.get("severity");
     const isRead = searchParams.get("isRead");
     const computerId = searchParams.get("computerId");
 
@@ -22,10 +21,6 @@ export async function GET(req: NextRequest) {
 
     if (type && type !== "all") {
       where.type = type;
-    }
-
-    if (severity && severity !== "all") {
-      where.severity = severity.toUpperCase();
     }
 
     if (isRead !== null && isRead !== "all") {
@@ -70,7 +65,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { type, severity, message, computerId, metadata } = body;
+    const { type, message, computerId } = body;
 
     if (!type || !message || !computerId) {
       return NextResponse.json(
@@ -94,11 +89,9 @@ export async function POST(req: NextRequest) {
     const alert = await prisma.alert.create({
       data: {
         type,
-        severity: severity || "MEDIUM",
         message,
         computerId,
         organizationId: session.user.organizationId,
-        metadata: metadata ? JSON.stringify(metadata) : null,
       },
       include: {
         computer: {

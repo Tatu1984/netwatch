@@ -103,7 +103,7 @@ export default function ApplicationsReportPage() {
                     borderRadius: "8px",
                     color: "hsl(var(--popover-foreground))",
                   }}
-                  formatter={(value: number) => [`${value} hours`, "Usage"]}
+                  formatter={(value) => [`${value ?? 0} hours`, "Usage"]}
                 />
                 <Bar dataKey="hours" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
               </BarChart>

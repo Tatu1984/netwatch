@@ -56,7 +56,10 @@ export async function GET(request: NextRequest) {
     const extension = formatType;
     const filename = `${reportType}-report-${format(new Date(), "yyyy-MM-dd")}.${extension}`;
 
-    return new NextResponse(result, {
+    // Convert Buffer to Uint8Array for NextResponse compatibility
+    const body = typeof result === 'string' ? result : new Uint8Array(result);
+
+    return new NextResponse(body, {
       headers: {
         "Content-Type": contentType,
         "Content-Disposition": `attachment; filename="${filename}"`,
@@ -314,7 +317,7 @@ async function generateKeystrokesReport(computerId: string | null, startDate: Da
     ],
     rows: keylogs.map(k => ({
       computer: k.computer.name,
-      application: k.applicationName || "Unknown",
+      application: k.application || "Unknown",
       window: (k.windowTitle || "Unknown").substring(0, 40),
       keystrokes: k.keystrokes.substring(0, 50) + (k.keystrokes.length > 50 ? "..." : ""),
       time: k.capturedAt,
