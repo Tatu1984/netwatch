@@ -7,13 +7,30 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eye, AlertCircle } from "lucide-react";
-import { useState } from "react";
+import { Eye, AlertCircle, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
 
 export default function LoginPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [checkingSetup, setCheckingSetup] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Check if first-time setup is needed
+    fetch("/api/setup")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.needsSetup) {
+          router.push("/setup");
+        } else {
+          setCheckingSetup(false);
+        }
+      })
+      .catch(() => {
+        setCheckingSetup(false);
+      });
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -45,6 +62,14 @@ export default function LoginPage() {
     }
   };
 
+  if (checkingSetup) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/50 p-4">
       <Card className="w-full max-w-md">
@@ -74,9 +99,9 @@ export default function LoginPage() {
                 id="email"
                 name="email"
                 type="email"
-                placeholder="admin@acme.com"
-                defaultValue="admin@acme.com"
+                placeholder="you@company.com"
                 required
+                autoComplete="email"
               />
             </div>
             <div className="space-y-2">
@@ -93,28 +118,23 @@ export default function LoginPage() {
                 id="password"
                 name="password"
                 type="password"
-                placeholder="password123"
-                defaultValue="password123"
+                placeholder="Enter your password"
                 required
+                autoComplete="current-password"
               />
-            </div>
-            <div className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
-              <p className="font-medium mb-1">Demo Credentials:</p>
-              <p>Admin: admin@acme.com / password123</p>
-              <p>Manager: manager@acme.com / password123</p>
-              <p>Viewer: viewer@acme.com / password123</p>
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Signing in..." : "Sign In"}
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                "Sign In"
+              )}
             </Button>
-            <p className="text-sm text-muted-foreground text-center">
-              Don&apos;t have an account?{" "}
-              <Link href="/register" className="text-primary hover:underline">
-                Sign up
-              </Link>
-            </p>
           </CardFooter>
         </form>
       </Card>

