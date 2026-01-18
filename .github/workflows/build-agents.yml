@@ -6,6 +6,9 @@ on:
       - 'v*'
   workflow_dispatch:  # Allow manual trigger
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -156,11 +159,11 @@ jobs:
         with:
           files: |
             installers/**/*.exe
-            installers/**/*.msi
             installers/**/*.AppImage
             installers/**/*.dmg
           draft: false
           prerelease: false
           generate_release_notes: true
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
