@@ -13,12 +13,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: agent/package-lock.json
+
+      - name: Install Windows build tools
+        run: npm install -g windows-build-tools node-gyp
 
       - name: Install dependencies
         working-directory: agent
@@ -47,6 +55,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -57,7 +70,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libx11-dev libxtst-dev libpng-dev
+          sudo apt-get install -y libx11-dev libxtst-dev libpng-dev libxkbfile-dev
 
       - name: Install dependencies
         working-directory: agent
@@ -83,6 +96,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
