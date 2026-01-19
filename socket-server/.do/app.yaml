@@ -1,0 +1,34 @@
+name: netwatch-socket
+region: nyc
+services:
+  - name: socket-server
+    github:
+      repo: Tatu1984/netwatch
+      branch: main
+      deploy_on_push: true
+    source_dir: socket-server
+    build_command: npm install && npm run build
+    run_command: npm start
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: FRONTEND_URL
+        scope: RUN_TIME
+        type: SECRET
+      - key: PORT
+        scope: RUN_TIME
+        value: "4000"
+      - key: NODE_ENV
+        scope: RUN_TIME
+        value: production
+    http_port: 4000
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    health_check:
+      http_path: /health
+      initial_delay_seconds: 10
+      period_seconds: 10
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
