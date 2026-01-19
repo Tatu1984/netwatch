@@ -1,0 +1,42 @@
+name: netwatch
+region: nyc
+services:
+  - name: web
+    github:
+      repo: Tatu1984/netwatch
+      branch: main
+      deploy_on_push: true
+    build_command: npm run build
+    run_command: npm start
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: AUTH_SECRET
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: AUTH_URL
+        scope: RUN_AND_BUILD_TIME
+        value: ${APP_URL}
+      - key: NEXTAUTH_URL
+        scope: RUN_AND_BUILD_TIME
+        value: ${APP_URL}
+      - key: NEXT_PUBLIC_SOCKET_URL
+        scope: RUN_AND_BUILD_TIME
+        value: ${APP_URL}
+      - key: ENCRYPTION_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: NODE_ENV
+        scope: RUN_AND_BUILD_TIME
+        value: production
+    http_port: 3000
+    instance_count: 1
+    instance_size_slug: professional-xs
+    health_check:
+      http_path: /api/health
+      initial_delay_seconds: 30
+      period_seconds: 10
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
