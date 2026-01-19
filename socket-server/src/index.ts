@@ -59,6 +59,125 @@ const consoleNamespace = io.of("/console");
 agentNamespace.on("connection", (socket) => {
   console.log(`Agent connected: ${socket.id}`);
 
+  // Auth handler - auto-creates computers (used by desktop agents)
+  socket.on("auth", async (data: {
+    machineId: string;
+    hostname: string;
+    osType: string;
+    osVersion: string;
+    macAddress: string;
+    ipAddress: string;
+    agentVersion: string;
+  }) => {
+    try {
+      console.log(`Agent auth attempt: ${data.hostname} (${data.macAddress})`);
+
+      // Find or create computer record
+      let computer = await prisma.computer.findFirst({
+        where: {
+          OR: [
+            { macAddress: data.macAddress },
+            { hostname: data.hostname }
+          ]
+        },
+      });
+
+      if (!computer) {
+        // Auto-register new computer
+        const org = await prisma.organization.findFirst();
+        if (!org) {
+          console.error("No organization found - agent cannot register");
+          socket.emit("auth_error", { message: "No organization found" });
+          return;
+        }
+
+        computer = await prisma.computer.create({
+          data: {
+            name: data.hostname,
+            hostname: data.hostname,
+            macAddress: data.macAddress,
+            ipAddress: data.ipAddress,
+            osType: data.osType,
+            osVersion: data.osVersion,
+            agentVersion: data.agentVersion,
+            status: "ONLINE",
+            lastSeen: new Date(),
+            organizationId: org.id,
+          },
+        });
+        console.log(`New computer created: ${computer.hostname} (${computer.id})`);
+      } else {
+        // Update existing computer
+        computer = await prisma.computer.update({
+          where: { id: computer.id },
+          data: {
+            ipAddress: data.ipAddress,
+            osType: data.osType,
+            osVersion: data.osVersion,
+            agentVersion: data.agentVersion,
+            status: "ONLINE",
+            lastSeen: new Date(),
+          },
+        });
+        console.log(`Existing computer updated: ${computer.hostname} (${computer.id})`);
+      }
+
+      // Store connection
+      connectedAgents.set(computer.id, {
+        socketId: socket.id,
+        computerId: computer.id,
+        connectedAt: new Date(),
+      });
+
+      socket.data = { computerId: computer.id };
+      socket.join(`agent:${computer.id}`);
+
+      socket.emit("auth_success", {
+        computerId: computer.id,
+        config: {
+          screenshotInterval: 5000,
+          activityLogInterval: 10000,
+          keystrokeBufferSize: 100,
+        }
+      });
+
+      // Notify consoles
+      consoleNamespace.emit("agent_online", {
+        computerId: computer.id,
+        hostname: data.hostname,
+      });
+
+      console.log(`Agent authenticated: ${computer.hostname} (${computer.id})`);
+
+      // Check for pending commands
+      const pendingCommands = await prisma.deviceCommand.findMany({
+        where: {
+          computerId: computer.id,
+          status: "PENDING",
+        },
+        orderBy: { createdAt: "asc" },
+      });
+
+      for (const cmd of pendingCommands) {
+        socket.emit("command", {
+          id: cmd.id,
+          command: cmd.command,
+          payload: cmd.payload ? JSON.parse(cmd.payload) : null,
+        });
+
+        await prisma.deviceCommand.update({
+          where: { id: cmd.id },
+          data: { status: "SENT", sentAt: new Date() },
+        });
+      }
+
+    } catch (error) {
+      console.error("Agent auth error:", error);
+      socket.emit("auth_error", { message: "Authentication failed" });
+    }
+  });
+
+  // Legacy register handler (for backwards compatibility)
   socket.on("register", async (data: { computerId: string; apiKey?: string }) => {
     const { computerId } = data;
 
@@ -78,22 +197,59 @@ agentNamespace.on("connection", (socket) => {
         connectedAt: new Date(),
       });
 
+      socket.data = { computerId };
       socket.join(`agent:${computerId}`);
       socket.emit("registered", { success: true });
 
       // Notify consoles
       consoleNamespace.emit("agent_online", { computerId });
 
-      console.log(`Agent registered: ${computerId}`);
+      console.log(`Agent registered (legacy): ${computerId}`);
     } catch (error) {
       console.error("Agent registration error:", error);
       socket.emit("registered", { success: false, error: "Registration failed" });
     }
   });
 
+  // Heartbeat handler
+  socket.on("heartbeat", async (data: {
+    cpuUsage: number;
+    memoryUsage: number;
+    diskUsage: number;
+    activeWindow?: string;
+    activeProcess?: string;
+    isIdle: boolean;
+    idleTime: number;
+  }) => {
+    const computerId = socket.data?.computerId;
+    if (!computerId) return;
+
+    try {
+      await prisma.computer.update({
+        where: { id: computerId },
+        data: {
+          lastSeen: new Date(),
+          cpuUsage: data.cpuUsage,
+          memoryUsage: data.memoryUsage,
+          diskUsage: data.diskUsage,
+          status: "ONLINE",
+        },
+      });
+
+      // Broadcast to watching consoles
+      consoleNamespace.to(`watching:${computerId}`).emit("heartbeat", {
+        computerId,
+        ...data,
+      });
+    } catch (error) {
+      console.error("Error updating heartbeat:", error);
+    }
+  });
+
   // Handle screen frame from agent
   socket.on("screen_frame", (data: { computerId: string; frame: string; timestamp: number }) => {
-    consoleNamespace.to(`watching:${data.computerId}`).emit("screen_frame", data);
+    const computerId = socket.data?.computerId || data.computerId;
+    consoleNamespace.to(`watching:${computerId}`).emit("screen_frame", { ...data, computerId });
   });
 
   // Handle activity data from agent
@@ -273,26 +429,40 @@ agentNamespace.on("connection", (socket) => {
 
   // Handle disconnect
   socket.on("disconnect", async () => {
-    // Find which computer this agent was for
-    for (const [computerId, agent] of connectedAgents.entries()) {
-      if (agent.socketId === socket.id) {
-        connectedAgents.delete(computerId);
+    const computerId = socket.data?.computerId;
 
-        try {
-          await prisma.computer.update({
-            where: { id: computerId },
-            data: {
-              status: "OFFLINE",
-              lastSeen: new Date(),
-            },
-          });
-        } catch (error) {
-          console.error("Error updating computer status:", error);
+    if (computerId) {
+      connectedAgents.delete(computerId);
+
+      try {
+        await prisma.computer.update({
+          where: { id: computerId },
+          data: {
+            status: "OFFLINE",
+            lastSeen: new Date(),
+          },
+        });
+      } catch (error) {
+        console.error("Error updating computer status:", error);
+      }
+
+      consoleNamespace.emit("agent_offline", { computerId });
+      console.log(`Agent disconnected: ${computerId}`);
+    } else {
+      // Fallback: search by socket ID
+      for (const [compId, agent] of connectedAgents.entries()) {
+        if (agent.socketId === socket.id) {
+          connectedAgents.delete(compId);
+          try {
+            await prisma.computer.update({
+              where: { id: compId },
+              data: { status: "OFFLINE", lastSeen: new Date() },
+            });
+          } catch (e) { /* ignore */ }
+          consoleNamespace.emit("agent_offline", { computerId: compId });
+          console.log(`Agent disconnected (fallback): ${compId}`);
+          break;
         }
-
-        consoleNamespace.emit("agent_offline", { computerId });
-        console.log(`Agent disconnected: ${computerId}`);
-        break;
       }
     }
   });
