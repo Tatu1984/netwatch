@@ -29,14 +29,14 @@ jobs:
             artifact_name: netwatch-agent.exe
             release_name: netwatch-agent-windows-x64.exe
 
-          # macOS Intel
-          - os: macos-13
+          # macOS Intel (using macos-latest with cross-compile)
+          - os: macos-latest
             target: x86_64-apple-darwin
             artifact_name: netwatch-agent
             release_name: netwatch-agent-darwin-x64
 
           # macOS Apple Silicon
-          - os: macos-14
+          - os: macos-latest
             target: aarch64-apple-darwin
             artifact_name: netwatch-agent
             release_name: netwatch-agent-darwin-arm64
