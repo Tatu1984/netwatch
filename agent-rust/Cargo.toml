@@ -96,6 +96,9 @@ lazy_static = "1.4"
 # User directories
 dirs = "5"
 
+# System tray
+tray-icon = "0.14"
+
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["winuser", "processthreadsapi", "tlhelp32", "handleapi", "psapi", "winnt", "sysinfoapi"] }
 

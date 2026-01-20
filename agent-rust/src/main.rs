@@ -9,6 +9,8 @@
     windows_subsystem = "windows"
 )]
 
+mod tray;
+
 use netwatch_agent::{
     config::Config,
     services::{
@@ -18,10 +20,13 @@ use netwatch_agent::{
     },
     socket::SocketClient,
 };
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{error, info, warn};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+
+use crate::tray::SystemTray;
 
 /// Default server URL
 const DEFAULT_SERVER_URL: &str = "https://do.roydevelops.tech/nw-socket";
@@ -59,12 +64,23 @@ pub struct AppState {
     pub is_monitoring: Arc<RwLock<bool>>,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// Status update channel message
+#[derive(Clone)]
+enum StatusUpdate {
+    Connecting,
+    Connected,
+    Disconnected,
+    Error(String),
+}
+
+fn main() {
     // Initialize logging
     tracing_subscriber::registry()
         .with(fmt::layer())
-        .with(EnvFilter::from_default_env().add_directive("netwatch_agent=info".parse()?))
+        .with(
+            EnvFilter::from_default_env()
+                .add_directive("netwatch_agent=info".parse().unwrap()),
+        )
         .init();
 
     info!("NetWatch Agent v{} starting...", env!("CARGO_PKG_VERSION"));
@@ -83,32 +99,108 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Use default server URL if not configured
     if config.server_url.is_empty() {
-        info!("No server URL in config, using default: {}", DEFAULT_SERVER_URL);
+        info!(
+            "No server URL in config, using default: {}",
+            DEFAULT_SERVER_URL
+        );
         config.server_url = DEFAULT_SERVER_URL.to_string();
     }
 
+    let server_url = config.server_url.clone();
+
+    // Create channels for communication between tray and agent
+    let (status_tx, status_rx) = std::sync::mpsc::channel::<StatusUpdate>();
+    let exit_requested = Arc::new(AtomicBool::new(false));
+    let exit_flag = exit_requested.clone();
+
+    // Create the system tray
+    let tray = match SystemTray::new(&server_url, exit_requested.clone()) {
+        Ok(t) => {
+            info!("System tray created successfully");
+            Some(t)
+        }
+        Err(e) => {
+            warn!("Failed to create system tray: {}. Running without tray.", e);
+            None
+        }
+    };
+
+    // Spawn the agent runtime in a background thread
+    let agent_handle = std::thread::spawn(move || {
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
+        rt.block_on(async move {
+            run_agent(config, status_tx, exit_flag).await;
+        });
+    });
+
+    // Run the tray event loop on the main thread
+    if let Some(tray) = tray {
+        tray::run_event_loop(|| {
+            // Check for status updates
+            while let Ok(status) = status_rx.try_recv() {
+                match status {
+                    StatusUpdate::Connecting => tray.set_status("Connecting..."),
+                    StatusUpdate::Connected => tray.set_status("Connected"),
+                    StatusUpdate::Disconnected => tray.set_status("Disconnected"),
+                    StatusUpdate::Error(msg) => tray.set_status(&format!("Error: {}", msg)),
+                }
+            }
+
+            // Check for menu events
+            if let Ok(event) = tray_icon::menu::MenuEvent::receiver().try_recv() {
+                tray.handle_menu_event(&event);
+            }
+
+            // Return false to exit the loop if exit was requested
+            !exit_requested.load(Ordering::SeqCst)
+        });
+
+        info!("Tray event loop ended, shutting down...");
+    } else {
+        // No tray - just wait for the agent thread
+        let _ = agent_handle.join();
+    }
+
+    info!("NetWatch Agent stopped");
+}
+
+async fn run_agent(
+    config: Config,
+    status_tx: std::sync::mpsc::Sender<StatusUpdate>,
+    exit_flag: Arc<AtomicBool>,
+) {
     let config = Arc::new(RwLock::new(config));
 
     // Create socket client
     let socket = Arc::new(SocketClient::new(config.clone()));
     let is_monitoring = Arc::new(RwLock::new(false));
 
-    let app_state = Arc::new(AppState {
+    let _app_state = Arc::new(AppState {
         socket: socket.clone(),
         config: config.clone(),
         is_monitoring: is_monitoring.clone(),
     });
 
     // Connect to server
-    info!("Connecting to server: {}", config.read().await.server_url);
+    let _ = status_tx.send(StatusUpdate::Connecting);
+    info!(
+        "Connecting to server: {}",
+        config.read().await.server_url
+    );
 
     if let Err(e) = socket.connect().await {
-        let msg = format!("Failed to connect to server: {}\n\nServer: {}", e, config.read().await.server_url);
+        let msg = format!(
+            "Failed to connect to server: {}\n\nServer: {}",
+            e,
+            config.read().await.server_url
+        );
         error!("{}", msg);
+        let _ = status_tx.send(StatusUpdate::Error(e.to_string()));
         show_error("NetWatch Agent - Connection Error", &msg);
-        std::process::exit(1);
+        return;
     }
 
+    let _ = status_tx.send(StatusUpdate::Connected);
     info!("Connected to server successfully");
 
     // Initialize services
@@ -209,51 +301,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await;
     }
 
-    // Handle graceful shutdown
-    let shutdown_socket = socket.clone();
-    let shutdown_screen = screen_capture.clone();
-    let shutdown_activity = activity_tracker.clone();
-    let shutdown_keylogger = keylogger.clone();
-    let shutdown_clipboard = clipboard.clone();
-    let shutdown_process = process_monitor.clone();
-    let shutdown_terminal = terminal.clone();
-    let shutdown_blocking = blocking_service.clone();
-
-    tokio::spawn(async move {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("Failed to install CTRL+C handler");
-
-        info!("Shutting down...");
-
-        // Stop all services
-        shutdown_screen.stop().await;
-        shutdown_activity.stop().await;
-        shutdown_keylogger.stop().await;
-        shutdown_clipboard.stop().await;
-        shutdown_process.stop().await;
-        shutdown_terminal.stop_all().await;
-        shutdown_blocking.stop().await;
-
-        // Disconnect socket
-        shutdown_socket.disconnect().await;
-
-        info!("NetWatch Agent stopped");
-        std::process::exit(0);
-    });
-
-    // Keep the main task running
+    // Keep running and check for exit signal
+    let status_tx_clone = status_tx.clone();
     loop {
+        // Check if exit was requested
+        if exit_flag.load(Ordering::SeqCst) {
+            info!("Exit requested, shutting down services...");
+            break;
+        }
+
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
         // Check connection and attempt reconnect if needed
         if !socket.is_connected().await {
             warn!("Connection lost, attempting to reconnect...");
+            let _ = status_tx_clone.send(StatusUpdate::Disconnected);
+
             if let Err(e) = socket.connect().await {
                 error!("Reconnection failed: {}", e);
             } else {
                 info!("Reconnected successfully");
+                let _ = status_tx_clone.send(StatusUpdate::Connected);
             }
         }
     }
+
+    // Stop all services
+    screen_capture.stop().await;
+    activity_tracker.stop().await;
+    keylogger.stop().await;
+    clipboard.stop().await;
+    process_monitor.stop().await;
+    terminal.stop_all().await;
+    blocking_service.stop().await;
+
+    // Disconnect socket
+    socket.disconnect().await;
+
+    info!("Agent services stopped");
 }
