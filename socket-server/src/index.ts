@@ -24,7 +24,7 @@ app.use(express.json());
 
 // Health check endpoint
 app.get("/health", (req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString(), version: "3" });
+  res.json({ status: "ok", timestamp: new Date().toISOString(), version: "4" });
 });
 
 // Socket.IO options shared between both servers
