@@ -77,19 +77,13 @@ impl SocketClient {
 
         info!("Connecting to server: {}", server_url);
 
-        // Parse and validate the server URL
-        // rust_socketio expects base URL, it will add /socket.io internally
-        let parsed_url = url::Url::parse(&server_url)
+        // Validate the server URL
+        let _parsed_url = url::Url::parse(&server_url)
             .map_err(|e| SocketError::Config(format!("Invalid URL: {}", e)))?;
 
-        // Use just the base URL (scheme + host + port)
-        // rust_socketio handles /socket.io path internally
-        let socket_url = format!(
-            "{}://{}{}",
-            parsed_url.scheme(),
-            parsed_url.host_str().unwrap_or("localhost"),
-            parsed_url.port().map(|p| format!(":{}", p)).unwrap_or_default()
-        );
+        // Use the URL as-is - it should include the full path to socket.io endpoint
+        // e.g., https://do.roydevelops.tech/nw-socket/socket.io
+        let socket_url = server_url.trim_end_matches('/').to_string();
 
         info!("Connecting to socket URL: {} with namespace /agent", socket_url);
 
