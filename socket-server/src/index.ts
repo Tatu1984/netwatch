@@ -413,15 +413,20 @@ function setupConsoleNamespace(consoleNs: Namespace) {
   consoleNs.on("connection", (socket: Socket) => {
     console.log(`Console connected: ${socket.id}`);
 
-    socket.on("authenticate", (data: { userId: string; token?: string }) => {
+    // Handle both "auth" and "authenticate" event names for compatibility
+    const handleConsoleAuth = (data: { userId: string; token?: string }) => {
       connectedConsoles.set(socket.id, {
         socketId: socket.id,
         userId: data.userId,
         watchingComputers: new Set(),
       });
-      const onlineAgents = Array.from(connectedAgents.keys());
+      const onlineAgents = Array.from(connectedAgents.keys()).map(id => ({ computerId: id }));
       socket.emit("auth_success", { onlineAgents });
-    });
+      console.log(`Console authenticated: ${data.userId}, online agents: ${onlineAgents.length}`);
+    };
+
+    socket.on("auth", handleConsoleAuth);
+    socket.on("authenticate", handleConsoleAuth);
 
     socket.on("watch_computer", (data: { computerId: string }) => {
       const client = connectedConsoles.get(socket.id);
