@@ -97,7 +97,7 @@ lazy_static = "1.4"
 dirs = "5"
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["winuser", "processthreadsapi", "tlhelp32", "handleapi"] }
+winapi = { version = "0.3", features = ["winuser", "processthreadsapi", "tlhelp32", "handleapi", "psapi", "winnt", "sysinfoapi"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.9"
