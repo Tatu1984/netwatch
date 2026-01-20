@@ -78,7 +78,7 @@ impl SocketClient {
         info!("Connecting to server: {}", server_url);
 
         // Parse URL to handle path prefixes (e.g., https://domain.com/nw-socket)
-        // Socket.io needs the path to be /prefix/socket.io with namespace as separate param
+        // rust_socketio: URL path becomes the socket.io path, namespace set separately
         let parsed_url = url::Url::parse(&server_url)
             .map_err(|e| SocketError::Config(format!("Invalid URL: {}", e)))?;
 
@@ -91,14 +91,15 @@ impl SocketClient {
 
         let path_prefix = parsed_url.path().trim_end_matches('/');
 
-        // Build socket.io URL: base + path_prefix + /socket.io + namespace
-        let full_url = if path_prefix.is_empty() || path_prefix == "/" {
-            format!("{}/agent", base_url)
+        // Build socket.io URL: base + path_prefix (library adds /socket.io internally)
+        // Namespace (/agent) is set via .namespace() method
+        let socket_url = if path_prefix.is_empty() || path_prefix == "/" {
+            base_url.clone()
         } else {
-            format!("{}{}/socket.io/agent", base_url, path_prefix)
+            format!("{}{}", base_url, path_prefix)
         };
 
-        info!("Connecting to socket URL: {}", full_url);
+        info!("Connecting to socket URL: {} with namespace /agent", socket_url);
 
         // Clone Arcs for callbacks
         let connected = self.connected.clone();
@@ -118,7 +119,8 @@ impl SocketClient {
         let on_list_directory = self.on_list_directory.clone();
 
         // Build client
-        let mut builder = ClientBuilder::new(&full_url)
+        let mut builder = ClientBuilder::new(&socket_url)
+            .namespace("/agent")
             .transport_type(rust_socketio::TransportType::WebsocketUpgrade)
             .reconnect(true)
             .reconnect_delay(1000, 30000)

@@ -312,6 +312,17 @@ async fn run_agent(
             .await;
     }
 
+    // Register auth error handler
+    {
+        let status_tx_auth = status_tx.clone();
+        socket
+            .on_auth_error(move |error_msg| {
+                error!("Authentication failed: {}", error_msg);
+                let _ = status_tx_auth.send(StatusUpdate::Error(format!("Auth: {}", error_msg)));
+            })
+            .await;
+    }
+
     // Register command handlers
     remote_control.register_handlers(&socket).await;
     terminal.register_handlers(&socket).await;
