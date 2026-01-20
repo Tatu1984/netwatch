@@ -4,13 +4,28 @@ import { io, Socket } from "socket.io-client";
 
 let consoleSocket: Socket | null = null;
 
+// Determine socket.io path based on environment
+// Production (DO App Platform) uses /nw-socket/socket.io
+// Local development uses default /socket.io
+function getSocketPath(): string {
+  if (typeof window !== "undefined") {
+    // Check if we're on the production domain
+    if (window.location.hostname.includes("roydevelops.tech")) {
+      return "/nw-socket/socket.io";
+    }
+  }
+  return "/socket.io";
+}
+
 export function getConsoleSocket(): Socket {
   if (!consoleSocket) {
     consoleSocket = io("/console", {
+      path: getSocketPath(),
       autoConnect: false,
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
+      transports: ["polling", "websocket"], // Allow polling fallback
     });
   }
   return consoleSocket;

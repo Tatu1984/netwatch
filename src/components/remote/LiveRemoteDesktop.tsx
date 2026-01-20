@@ -64,15 +64,21 @@ export function LiveRemoteDesktop({
   const [terminalInput, setTerminalInput] = useState("");
   const terminalRef = useRef<HTMLDivElement>(null);
 
+  // Determine socket.io path based on environment
+  const getSocketPath = () => {
+    if (typeof window !== "undefined" && window.location.hostname.includes("roydevelops.tech")) {
+      return "/nw-socket/socket.io";
+    }
+    return "/socket.io";
+  };
+
   // Connect to socket
   useEffect(() => {
-    const socket = io(
-      process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:4000/console",
-      {
-        transports: ["websocket"],
-        reconnection: true,
-      }
-    );
+    const socket = io("/console", {
+      path: getSocketPath(),
+      transports: ["polling", "websocket"], // Allow polling fallback
+      reconnection: true,
+    });
 
     socketRef.current = socket;
 
