@@ -25,6 +25,10 @@ services:
     http_port: 4000
     instance_count: 1
     instance_size_slug: basic-xxs
+    routes:
+      - path: /
+      - path: /nw-socket
+        preserve_path_prefix: false
     health_check:
       http_path: /health
       initial_delay_seconds: 10
