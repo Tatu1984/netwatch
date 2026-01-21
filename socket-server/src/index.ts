@@ -385,6 +385,27 @@ function setupAgentNamespace(agentNs: Namespace, consoleNs: Namespace) {
       broadcastToConsoles("file_transfer_progress", data);
     });
 
+    // Terminal output handler
+    socket.on("terminal_output", (data: { sessionId: string; output: string }) => {
+      // Forward to console watching this terminal session
+      for (const ns of allConsoleNamespaces) {
+        ns.to(`terminal:${data.sessionId}`).emit("terminal_output", data);
+      }
+    });
+
+    // File content handler (for downloads)
+    socket.on("file_content", (data: { transferId: string; fileName: string; fileData: string; fileSize: number }) => {
+      broadcastToConsoles("file_content", data);
+    });
+
+    // Directory listing handler
+    socket.on("directory_listing", (data: { path: string; entries: Array<{ name: string; isDirectory: boolean; size: number }> }) => {
+      const computerId = socket.data?.computerId;
+      if (computerId) {
+        emitToWatching(computerId, "directory_listing", { computerId, ...data });
+      }
+    });
+
     // Disconnect handler
     socket.on("disconnect", async () => {
       const computerId = socket.data?.computerId;
@@ -466,6 +487,18 @@ function setupConsoleNamespace(consoleNs: Namespace) {
       }
     });
 
+    // Update stream settings (quality/fps)
+    socket.on("update_stream_settings", (data: { computerId: string; quality: number; fps: number }) => {
+      const agent = connectedAgents.get(data.computerId);
+      if (agent) {
+        agent.namespace.to(agent.socketId).emit("start_screen_stream", {
+          quality: data.quality,
+          fps: data.fps,
+        });
+        console.log(`Stream settings updated: ${data.computerId} - ${data.quality}% @ ${data.fps}fps`);
+      }
+    });
+
     socket.on("send_command", async (data: { computerId: string; command: string; payload?: Record<string, unknown> }) => {
       const agent = connectedAgents.get(data.computerId);
       if (agent) {
@@ -497,6 +530,71 @@ function setupConsoleNamespace(consoleNs: Namespace) {
       const agent = connectedAgents.get(data.computerId);
       if (agent) {
         agent.namespace.to(agent.socketId).emit("remote_input", data);
+      }
+    });
+
+    // Start remote control session
+    socket.on("start_remote_control", async (data: { computerId: string; mode: "VIEW" | "CONTROL" }) => {
+      const agent = connectedAgents.get(data.computerId);
+      if (agent) {
+        const sessionId = `rc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const quality = data.mode === "CONTROL" ? 80 : 60;
+        const fps = data.mode === "CONTROL" ? 15 : 5;
+
+        // Join watching room
+        const client = connectedConsoles.get(socket.id);
+        if (client) {
+          client.watchingComputers.add(data.computerId);
+          socket.join(`watching:${data.computerId}`);
+        }
+
+        // Tell agent to start streaming and enable remote control
+        agent.namespace.to(agent.socketId).emit("start_remote_control", {
+          sessionId,
+          mode: data.mode,
+          quality,
+          fps,
+        });
+        agent.namespace.to(agent.socketId).emit("start_screen_stream", { quality, fps });
+
+        socket.emit("remote_control_started", { sessionId });
+        console.log(`Remote control started: ${data.computerId} (${data.mode})`);
+      } else {
+        socket.emit("remote_control_error", { error: "Agent not online" });
+      }
+    });
+
+    // Request screenshot
+    socket.on("request_screenshot", (data: { computerId: string }) => {
+      const agent = connectedAgents.get(data.computerId);
+      if (agent) {
+        agent.namespace.to(agent.socketId).emit("capture_screenshot");
+        console.log(`Screenshot requested: ${data.computerId}`);
+      }
+    });
+
+    // Start terminal session
+    socket.on("start_terminal", (data: { computerId: string; shell?: string }) => {
+      const agent = connectedAgents.get(data.computerId);
+      if (agent) {
+        const sessionId = `term_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        socket.join(`terminal:${sessionId}`);
+        agent.namespace.to(agent.socketId).emit("start_terminal", {
+          sessionId,
+          shell: data.shell,
+        });
+        socket.emit("terminal_started", { sessionId });
+        console.log(`Terminal started: ${data.computerId}`);
+      } else {
+        socket.emit("terminal_error", { error: "Agent not online" });
+      }
+    });
+
+    // Terminal input
+    socket.on("terminal_input", (data: { computerId: string; sessionId: string; input: string }) => {
+      const agent = connectedAgents.get(data.computerId);
+      if (agent) {
+        agent.namespace.to(agent.socketId).emit("terminal_input", data);
       }
     });
 
@@ -541,6 +639,14 @@ function setupConsoleNamespace(consoleNs: Namespace) {
       if (agent) {
         agent.namespace.to(agent.socketId).emit("display_message", data);
         socket.emit("message_sent", { success: true });
+      }
+    });
+
+    // List directory for file browser
+    socket.on("list_directory", (data: { computerId: string; path: string }) => {
+      const agent = connectedAgents.get(data.computerId);
+      if (agent) {
+        agent.namespace.to(agent.socketId).emit("list_directory", { path: data.path });
       }
     });
 
