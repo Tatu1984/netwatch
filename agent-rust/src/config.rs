@@ -188,7 +188,7 @@ impl Config {
     fn get_config_paths() -> Vec<PathBuf> {
         let mut paths = Vec::new();
 
-        // User data directory
+        // User data directory (highest priority - user can override)
         if let Some(proj_dirs) = ProjectDirs::from("com", "netwatch", "agent") {
             let config_dir = proj_dirs.config_dir();
             paths.push(config_dir.join("config.json"));
@@ -197,11 +197,28 @@ impl Config {
         // Current working directory
         paths.push(PathBuf::from("config.json"));
 
-        // Executable directory
+        // Executable directory (for Windows installer)
         if let Ok(exe_path) = std::env::current_exe() {
             if let Some(exe_dir) = exe_path.parent() {
                 paths.push(exe_dir.join("config.json"));
+
+                // macOS .app bundle: look in Contents/Resources
+                #[cfg(target_os = "macos")]
+                {
+                    // exe is at .app/Contents/MacOS/binary
+                    // config is at .app/Contents/Resources/config.json
+                    if let Some(contents_dir) = exe_dir.parent() {
+                        let resources_dir = contents_dir.join("Resources");
+                        paths.push(resources_dir.join("config.json"));
+                    }
+                }
             }
+        }
+
+        // Linux system config directory
+        #[cfg(target_os = "linux")]
+        {
+            paths.push(PathBuf::from("/etc/netwatch/config.json"));
         }
 
         paths

