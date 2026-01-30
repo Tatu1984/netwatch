@@ -1,0 +1,148 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: netwatch
+      POSTGRES_PASSWORD: netwatch
+      POSTGRES_DB: netwatch
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U netwatch"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - netwatch-dev
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - netwatch-dev
+
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: netwatch
+      MINIO_ROOT_PASSWORD: netwatch123
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - netwatch-dev
+
+  minio-init:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 netwatch netwatch123 &&
+      mc mb --ignore-existing local/screenshots &&
+      mc mb --ignore-existing local/recordings &&
+      mc mb --ignore-existing local/uploads &&
+      echo 'Buckets created successfully'
+      "
+    networks:
+      - netwatch-dev
+
+  nextjs:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: "3000"
+      NODE_ENV: development
+      DATABASE_URL: postgresql://netwatch:netwatch@postgres:5432/netwatch
+      REDIS_URL: redis://redis:6379
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: netwatch
+      MINIO_SECRET_KEY: netwatch123
+      AUTH_SECRET: netwatch-dev-secret
+      AUTH_URL: http://localhost:3000
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SOCKET_URL: http://localhost:4000
+      DISABLE_EMBEDDED_SOCKET: "true"
+      ENCRYPTION_KEY: netwatch-encryption-key-32-chars!
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./prisma:/app/prisma
+      - ./server.ts:/app/server.ts
+      - ./next.config.ts:/app/next.config.ts
+      - ./tsconfig.json:/app/tsconfig.json
+      - ./postcss.config.mjs:/app/postcss.config.mjs
+      - ./eslint.config.mjs:/app/eslint.config.mjs
+      - ./sentry.client.config.ts:/app/sentry.client.config.ts
+      - ./sentry.server.config.ts:/app/sentry.server.config.ts
+      - ./sentry.edge.config.ts:/app/sentry.edge.config.ts
+      - nextjs-node-modules:/app/node_modules
+      - nextjs-next:/app/.next
+    command: >
+      sh -c "npx prisma generate && npx prisma db push && npm run dev"
+    networks:
+      - netwatch-dev
+
+  socket-server:
+    build:
+      context: .
+      dockerfile: socket-server/Dockerfile.dev
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: "4000"
+      NODE_ENV: development
+      DATABASE_URL: postgresql://netwatch:netwatch@postgres:5432/netwatch
+      FRONTEND_URL: http://localhost:3000
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ./socket-server/src:/app/src
+      - ./prisma:/app/prisma
+      - socket-node-modules:/app/node_modules
+    command: >
+      sh -c "npx prisma generate && npx prisma db push && npm run dev"
+    networks:
+      - netwatch-dev
+
+networks:
+  netwatch-dev:
+    driver: bridge
+
+volumes:
+  pgdata:
+  redis:
+  minio:
+  nextjs-node-modules:
+  nextjs-next:
+  socket-node-modules:

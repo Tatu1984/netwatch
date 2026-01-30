@@ -18,6 +18,7 @@ agent/
 agent/node_modules
 agent/dist
 agent/release
+agent-rust/
 
 # IDE
 .vscode
