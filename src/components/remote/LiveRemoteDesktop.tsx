@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { io, Socket } from "socket.io-client";
+import { getConsoleSocket } from "@/lib/socket-client";
+import { Socket } from "socket.io-client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -58,88 +59,87 @@ export function LiveRemoteDesktop({
   const [lastFrameTime, setLastFrameTime] = useState<number>(Date.now());
   const frameCountRef = useRef(0);
   const fpsIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [receivingFrames, setReceivingFrames] = useState(false);
+  const frameTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Terminal state
   const [terminalOutput, setTerminalOutput] = useState<string[]>([]);
   const [terminalInput, setTerminalInput] = useState("");
   const terminalRef = useRef<HTMLDivElement>(null);
 
-  // Determine socket.io path based on environment
-  const getSocketPath = () => {
-    if (typeof window !== "undefined" && window.location.hostname.includes("roydevelops.tech")) {
-      return "/nw-socket/socket.io";
-    }
-    return "/socket.io";
-  };
-
-  // Connect to socket
+  // Connect to shared socket
   useEffect(() => {
-    const socket = io("/console", {
-      path: getSocketPath(),
-      transports: ["polling", "websocket"], // Allow polling fallback
-      reconnection: true,
-    });
-
+    const socket = getConsoleSocket();
     socketRef.current = socket;
 
-    socket.on("connect", () => {
+    const onConnect = () => {
       console.log("Connected to console namespace");
       setConnected(true);
-
-      // Authenticate
       socket.emit("auth", { userId: "dashboard" });
-    });
+    };
 
-    socket.on("auth_success", () => {
+    const onAuthSuccess = () => {
       console.log("Console authenticated");
-      // Start watching the computer
       socket.emit("watch_computer", { computerId });
-
       if (sessionType === "SHELL") {
         socket.emit("start_terminal", { computerId, sessionId });
       }
-    });
+    };
 
-    socket.on("disconnect", () => {
+    const onDisconnect = () => {
       setConnected(false);
-    });
+      setReceivingFrames(false);
+    };
 
-    // Handle screen frames
-    socket.on("screen_frame", (data: { computerId: string; frame: string; timestamp: number }) => {
-      if (data.computerId === computerId) {
-        renderFrame(data.frame);
+    const onScreenFrame = (data: { computerId: string; frame: string; timestamp: number }) => {
+      if (data.computerId !== computerId) return;
+      renderFrame(data.frame);
+      const now = Date.now();
+      setLatency(now - data.timestamp);
+      setLastFrameTime(now);
+      frameCountRef.current++;
 
-        // Calculate latency
-        const now = Date.now();
-        setLatency(now - data.timestamp);
-        setLastFrameTime(now);
-        frameCountRef.current++;
+      // Reset frame timeout
+      setReceivingFrames(true);
+      if (frameTimeoutRef.current) clearTimeout(frameTimeoutRef.current);
+      frameTimeoutRef.current = setTimeout(() => setReceivingFrames(false), 3000);
+    };
+
+    const onTerminalOutput = (data: { sessionId: string; output: string }) => {
+      if (data.sessionId !== sessionId) return;
+      setTerminalOutput((prev) => [...prev, data.output]);
+      if (terminalRef.current) {
+        terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
       }
-    });
+    };
 
-    // Handle terminal output
-    socket.on("terminal_output", (data: { sessionId: string; output: string }) => {
-      if (data.sessionId === sessionId) {
-        setTerminalOutput((prev) => [...prev, data.output]);
-        // Auto-scroll terminal
-        if (terminalRef.current) {
-          terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
-        }
-      }
-    });
+    socket.on("connect", onConnect);
+    socket.on("auth_success", onAuthSuccess);
+    socket.on("disconnect", onDisconnect);
+    socket.on("screen_frame", onScreenFrame);
+    socket.on("terminal_output", onTerminalOutput);
 
-    // FPS counter
+    if (!socket.connected) {
+      socket.connect();
+    } else {
+      // Already connected, just auth + watch
+      socket.emit("auth", { userId: "dashboard" });
+    }
+
     fpsIntervalRef.current = setInterval(() => {
       setFps(frameCountRef.current);
       frameCountRef.current = 0;
     }, 1000);
 
     return () => {
-      if (fpsIntervalRef.current) {
-        clearInterval(fpsIntervalRef.current);
-      }
+      if (fpsIntervalRef.current) clearInterval(fpsIntervalRef.current);
+      if (frameTimeoutRef.current) clearTimeout(frameTimeoutRef.current);
       socket.emit("unwatch_computer", { computerId });
-      socket.disconnect();
+      socket.off("connect", onConnect);
+      socket.off("auth_success", onAuthSuccess);
+      socket.off("disconnect", onDisconnect);
+      socket.off("screen_frame", onScreenFrame);
+      socket.off("terminal_output", onTerminalOutput);
     };
   }, [computerId, sessionId, sessionType]);
 
@@ -427,24 +427,34 @@ export function LiveRemoteDesktop({
       </div>
 
       {/* Canvas */}
-      <div className="flex-1 bg-black flex items-center justify-center overflow-hidden">
+      <div className="flex-1 bg-black flex items-center justify-center overflow-hidden relative">
         {connected ? (
-          <canvas
-            ref={canvasRef}
-            tabIndex={0}
-            className="max-w-full max-h-full object-contain cursor-crosshair focus:outline-none"
-            onMouseDown={(e) => handleMouseEvent(e, "mousedown")}
-            onMouseUp={(e) => handleMouseEvent(e, "mouseup")}
-            onMouseMove={(e) => handleMouseEvent(e, "mousemove")}
-            onClick={(e) => handleMouseEvent(e, "click")}
-            onDoubleClick={(e) => handleMouseEvent(e, "dblclick")}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              handleMouseEvent(e, "contextmenu");
-            }}
-            onKeyDown={(e) => handleKeyEvent(e, "keydown")}
-            onKeyUp={(e) => handleKeyEvent(e, "keyup")}
-          />
+          <>
+            <canvas
+              ref={canvasRef}
+              tabIndex={0}
+              className="max-w-full max-h-full object-contain cursor-crosshair focus:outline-none"
+              onMouseDown={(e) => handleMouseEvent(e, "mousedown")}
+              onMouseUp={(e) => handleMouseEvent(e, "mouseup")}
+              onMouseMove={(e) => handleMouseEvent(e, "mousemove")}
+              onClick={(e) => handleMouseEvent(e, "click")}
+              onDoubleClick={(e) => handleMouseEvent(e, "dblclick")}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                handleMouseEvent(e, "contextmenu");
+              }}
+              onKeyDown={(e) => handleKeyEvent(e, "keydown")}
+              onKeyUp={(e) => handleKeyEvent(e, "keyup")}
+            />
+            {!receivingFrames && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+                <div className="text-center text-white">
+                  <RefreshCw className="h-10 w-10 mx-auto mb-3 animate-spin opacity-70" />
+                  <p>Waiting for screen data...</p>
+                </div>
+              </div>
+            )}
+          </>
         ) : (
           <div className="text-center text-muted-foreground">
             <RefreshCw className="h-12 w-12 mx-auto mb-4 animate-spin opacity-50" />

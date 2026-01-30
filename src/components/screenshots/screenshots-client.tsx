@@ -131,10 +131,8 @@ export function ScreenshotsClient({ initialScreenshots, computers }: Screenshots
   };
 
   const handleDownload = (screenshot: Screenshot) => {
-    if (!screenshot.imageUrl) return;
-
     const link = document.createElement("a");
-    link.href = screenshot.imageUrl;
+    link.href = `/api/screenshots/${screenshot.id}/image`;
     link.download = `screenshot-${screenshot.computer.name}-${format(new Date(screenshot.capturedAt), "yyyy-MM-dd-HHmmss")}.jpg`;
     document.body.appendChild(link);
     link.click();
@@ -201,9 +199,9 @@ export function ScreenshotsClient({ initialScreenshots, computers }: Screenshots
                   onClick={() => openViewer(index)}
                 >
                   <div className="relative aspect-video bg-muted">
-                    {screenshot.imageUrl ? (
+                    {screenshot.id ? (
                       <Image
-                        src={screenshot.imageUrl}
+                        src={`/api/screenshots/${screenshot.id}/image`}
                         alt={`Screenshot from ${screenshot.computer.name}`}
                         fill
                         className="object-cover transition-transform group-hover:scale-105"
@@ -300,9 +298,9 @@ export function ScreenshotsClient({ initialScreenshots, computers }: Screenshots
           </DialogHeader>
 
           <div className="flex items-center justify-center w-full h-full bg-black overflow-auto">
-            {currentScreenshot?.imageUrl && (
+            {currentScreenshot && (
               <img
-                src={currentScreenshot.imageUrl}
+                src={`/api/screenshots/${currentScreenshot.id}/image`}
                 alt={`Screenshot from ${currentScreenshot.computer.name}`}
                 style={{ transform: `scale(${zoom})` }}
                 className="max-w-none transition-transform"

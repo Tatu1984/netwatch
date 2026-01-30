@@ -241,6 +241,7 @@ impl SocketClient {
 
         // Spawn outgoing message sender task
         tokio::spawn(async move {
+            let mut consecutive_failures: u32 = 0;
             while let Some(msg) = rx.recv().await {
                 if !*connected.read().await {
                     break;
@@ -249,14 +250,23 @@ impl SocketClient {
                     "{}{}/?EIO=4&transport=polling&sid={}",
                     base_url_clone, socket_path_clone, session_id
                 );
-                if let Err(e) = http_client
+                match http_client
                     .post(&url)
                     .header("Content-Type", "text/plain;charset=UTF-8")
                     .body(msg)
                     .send()
                     .await
                 {
-                    error!("Failed to send message: {}", e);
+                    Ok(_) => { consecutive_failures = 0; }
+                    Err(e) => {
+                        consecutive_failures += 1;
+                        error!("Failed to send message ({}/3): {}", consecutive_failures, e);
+                        if consecutive_failures >= 3 {
+                            error!("Too many send failures, marking disconnected");
+                            *connected.write().await = false;
+                            break;
+                        }
+                    }
                 }
             }
             debug!("Outgoing message task ended");
@@ -283,6 +293,7 @@ impl SocketClient {
         // Spawn long-polling task for incoming messages
         tokio::spawn(async move {
             let mut last_ping = std::time::Instant::now();
+            let mut consecutive_poll_failures: u32 = 0;
 
             loop {
                 if !*connected_poll.read().await {
@@ -312,6 +323,7 @@ impl SocketClient {
 
                 match http_client_poll.get(&poll_url).send().await {
                     Ok(response) => {
+                        consecutive_poll_failures = 0;
                         if let Ok(text) = response.text().await {
                             // Parse multiple messages (can be batched)
                             for msg in Self::parse_polling_response(&text) {
@@ -348,7 +360,13 @@ impl SocketClient {
                         }
                     }
                     Err(e) => {
-                        error!("Polling error: {}", e);
+                        consecutive_poll_failures += 1;
+                        error!("Polling error ({}/3): {}", consecutive_poll_failures, e);
+                        if consecutive_poll_failures >= 3 {
+                            error!("Too many poll failures, marking disconnected");
+                            *connected_poll.write().await = false;
+                            break;
+                        }
                         tokio::time::sleep(Duration::from_secs(1)).await;
                     }
                 }

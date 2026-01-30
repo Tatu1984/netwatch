@@ -4,10 +4,15 @@ import { createServer } from "http";
 import { Server, Namespace, Socket } from "socket.io";
 import cors from "cors";
 import { PrismaClient } from "@prisma/client";
+import { mkdirSync, writeFileSync } from "fs";
+import { join } from "path";
 
 const app = express();
 const httpServer = createServer(app);
 const prisma = new PrismaClient();
+
+const UPLOADS_DIR = join(process.cwd(), "uploads", "screenshots");
+mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 const PORT = parseInt(process.env.PORT || "4000", 10);
@@ -36,6 +41,7 @@ const socketOptions = {
   },
   transports: ["websocket", "polling"] as ("websocket" | "polling")[],
   allowEIO3: true,
+  maxHttpBufferSize: 10e6, // 10MB — screenshots can be large
 };
 
 // Primary Socket.IO server at default /socket.io path
@@ -357,14 +363,23 @@ function setupAgentNamespace(agentNs: Namespace, consoleNs: Namespace) {
       }
 
       try {
+        // Write screenshot to disk instead of storing base64 in DB
+        const buf = Buffer.from(data.imageData, "base64");
+        const dir = join(UPLOADS_DIR, computerId);
+        mkdirSync(dir, { recursive: true });
+        const filename = `${Date.now()}.jpg`;
+        const filePath = join(dir, filename);
+        writeFileSync(filePath, buf);
+
         const screenshot = await prisma.screenshot.create({
           data: {
             computerId,
-            imageUrl: data.imageData,
+            filePath,
+            fileSize: buf.length,
             activeWindow: data.activeWindow,
           },
         });
-        emitToWatching(computerId, "screenshot", { computerId, ...data, id: screenshot.id });
+        emitToWatching(computerId, "screenshot", { computerId, id: screenshot.id, activeWindow: data.activeWindow });
       } catch (error) {
         console.error("Error saving screenshot:", error);
       }

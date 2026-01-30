@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { unlink } from "fs/promises";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -67,6 +68,11 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
 
     if (!existing) {
       return NextResponse.json({ error: "Screenshot not found" }, { status: 404 });
+    }
+
+    // Remove file from disk if it exists
+    if (existing.filePath) {
+      try { await unlink(existing.filePath); } catch {}
     }
 
     await prisma.screenshot.delete({ where: { id } });

@@ -14,7 +14,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "db:seed": "tsx prisma/seed.ts",
-    "db:reset": "npx prisma migrate reset --force && tsx prisma/seed.ts"
+    "db:reset": "npx prisma migrate reset --force && tsx prisma/seed.ts",
+    "prisma:link": "ln -sf ../../prisma/schema.prisma socket-server/prisma/schema.prisma"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

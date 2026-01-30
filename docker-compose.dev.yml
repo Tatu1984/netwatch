@@ -130,6 +130,7 @@ services:
       - ./socket-server/src:/app/src
       - ./prisma:/app/prisma
       - socket-node-modules:/app/node_modules
+      - screenshots:/app/uploads/screenshots
     command: >
       sh -c "npx prisma generate && npx prisma db push && npm run dev"
     networks:
@@ -146,3 +147,4 @@ volumes:
   nextjs-node-modules:
   nextjs-next:
   socket-node-modules:
+  screenshots:

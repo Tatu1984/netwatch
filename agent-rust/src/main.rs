@@ -15,8 +15,7 @@ use netwatch_agent::{
     config::Config,
     services::{
         ActivityTracker, BlockingService, Clipboard, Commands, FileTransfer, Keylogger,
-        ProcessMonitor, RemoteControl, ScreenCapture, ScreenRecorder, SystemRestrictions,
-        Terminal,
+        ProcessMonitor, RemoteControl, ScreenCapture, ScreenRecorder, SystemRestrictions, Terminal,
     },
     socket::SocketClient,
 };
@@ -31,7 +30,7 @@ use crate::tray::SystemTray;
 /// Default server URL
 // The socket server is behind /nw-socket path on the main domain
 // The client will append /socket.io to make: /nw-socket/socket.io
-const DEFAULT_SERVER_URL: &str = "https://do.roydevelops.tech/nw-socket";
+const DEFAULT_SERVER_URL: &str = "http://localhost:4000";
 
 /// Initialize Windows COM library
 #[cfg(target_os = "windows")]
@@ -105,20 +104,25 @@ fn main() {
             if let Ok(file) = std::fs::OpenOptions::new()
                 .create(true)
                 .write(true)
-                .truncate(true)  // Start fresh each time
+                .truncate(true) // Start fresh each time
                 .open(&log_file)
             {
                 // Enable debug logging for socket.io to diagnose connection issues
                 tracing_subscriber::registry()
                     .with(fmt::layer().with_writer(std::sync::Mutex::new(file)))
-                    .with(EnvFilter::from_default_env()
-                        .add_directive("netwatch_agent=debug".parse().unwrap())
-                        .add_directive("rust_socketio=debug".parse().unwrap())
-                        .add_directive("engineio=debug".parse().unwrap()))
+                    .with(
+                        EnvFilter::from_default_env()
+                            .add_directive("netwatch_agent=debug".parse().unwrap())
+                            .add_directive("rust_socketio=debug".parse().unwrap())
+                            .add_directive("engineio=debug".parse().unwrap()),
+                    )
                     .init();
             } else {
                 tracing_subscriber::registry()
-                    .with(EnvFilter::from_default_env().add_directive("netwatch_agent=info".parse().unwrap()))
+                    .with(
+                        EnvFilter::from_default_env()
+                            .add_directive("netwatch_agent=info".parse().unwrap()),
+                    )
                     .init();
             }
         }
@@ -128,7 +132,9 @@ fn main() {
     {
         tracing_subscriber::registry()
             .with(fmt::layer())
-            .with(EnvFilter::from_default_env().add_directive("netwatch_agent=info".parse().unwrap()))
+            .with(
+                EnvFilter::from_default_env().add_directive("netwatch_agent=info".parse().unwrap()),
+            )
             .init();
     }
 
@@ -244,28 +250,6 @@ async fn run_agent(
         is_monitoring: is_monitoring.clone(),
     });
 
-    // Connect to server
-    let _ = status_tx.send(StatusUpdate::Connecting);
-    info!(
-        "Connecting to server: {}",
-        config.read().await.server_url
-    );
-
-    if let Err(e) = socket.connect().await {
-        let msg = format!(
-            "Failed to connect to server: {}\n\nServer: {}",
-            e,
-            config.read().await.server_url
-        );
-        error!("{}", msg);
-        let _ = status_tx.send(StatusUpdate::Error(e.to_string()));
-        show_error("NetWatch Agent - Connection Error", &msg);
-        return;
-    }
-
-    let _ = status_tx.send(StatusUpdate::Connected);
-    info!("Connected to server successfully");
-
     // Initialize services
     let screen_capture = ScreenCapture::new(socket.clone(), config.clone());
     let activity_tracker = ActivityTracker::new(socket.clone());
@@ -280,7 +264,8 @@ async fn run_agent(
     let system_restrictions = SystemRestrictions::new(socket.clone());
     let screen_recorder = ScreenRecorder::new(socket.clone());
 
-    // Register event handlers
+    // Register ALL callbacks BEFORE connect() to avoid race condition
+    // (connect() processes auth inline, so callbacks must exist first)
     {
         let screen_capture = screen_capture.clone();
         let activity_tracker = activity_tracker.clone();
@@ -318,7 +303,6 @@ async fn run_agent(
             .await;
     }
 
-    // Register auth error handler
     {
         let status_tx_auth = status_tx.clone();
         socket
@@ -329,7 +313,6 @@ async fn run_agent(
             .await;
     }
 
-    // Register command handlers
     remote_control.register_handlers(&socket).await;
     terminal.register_handlers(&socket).await;
     file_transfer.register_handlers(&socket).await;
@@ -338,7 +321,6 @@ async fn run_agent(
     system_restrictions.register_handlers(&socket).await;
     screen_recorder.register_handlers(&socket).await;
 
-    // Register screen stream handlers
     {
         let screen_capture_start = screen_capture.clone();
         socket
@@ -374,6 +356,25 @@ async fn run_agent(
             })
             .await;
     }
+
+    // NOW connect (callbacks are registered, auth_success will fire correctly)
+    let _ = status_tx.send(StatusUpdate::Connecting);
+    info!("Connecting to server: {}", config.read().await.server_url);
+
+    if let Err(e) = socket.connect().await {
+        let msg = format!(
+            "Failed to connect to server: {}\n\nServer: {}",
+            e,
+            config.read().await.server_url
+        );
+        error!("{}", msg);
+        let _ = status_tx.send(StatusUpdate::Error(e.to_string()));
+        show_error("NetWatch Agent - Connection Error", &msg);
+        return;
+    }
+
+    let _ = status_tx.send(StatusUpdate::Connected);
+    info!("Connected to server successfully");
 
     // Keep running and check for exit signal
     let status_tx_clone = status_tx.clone();

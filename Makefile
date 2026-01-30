@@ -1,7 +1,7 @@
 COMPOSE := docker compose -f docker-compose.dev.yml
 
 .PHONY: dev dev-down dev-logs dev-ps \
-        dev-db-push dev-db-seed dev-db-reset dev-db-studio \
+        dev-db-push dev-db-seed dev-db-seed-clean dev-db-reset dev-db-studio \
         dev-shell-next dev-shell-socket dev-clean
 
 dev:
@@ -21,6 +21,9 @@ dev-db-push:
 
 dev-db-seed:
 	$(COMPOSE) exec nextjs npx tsx prisma/seed.ts
+
+dev-db-seed-clean:
+	$(COMPOSE) exec nextjs npx tsx prisma/seed-clean.ts
 
 dev-db-reset:
 	$(COMPOSE) exec nextjs npx prisma db push --force-reset
